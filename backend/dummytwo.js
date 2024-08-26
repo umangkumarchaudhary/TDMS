@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose'); // Import mongoose
+const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const connectDB = require('./config/db');
@@ -20,11 +20,11 @@ const bookingSchema = new mongoose.Schema({
     endTime: { type: String, required: true },
     carModel: { type: String, required: true },
     consultantName: { type: String, required: true },
+    location: { type: String, required: true },  // Added location field
+    passkey: { type: String, required: true },   // Added passkey field
 });
 
 const Booking = mongoose.model('Booking', bookingSchema);
-
-// Routes
 
 // Get all bookings
 app.get('/api/bookings', async (req, res) => {
@@ -38,7 +38,7 @@ app.get('/api/bookings', async (req, res) => {
 
 // Create a new booking
 app.post('/api/bookings', async (req, res) => {
-    const { date, startTime, endTime, carModel, consultantName } = req.body;
+    const { date, startTime, endTime, carModel, consultantName, location, passkey } = req.body;
 
     // Check if the car is already booked for the requested time
     try {
@@ -46,16 +46,12 @@ app.post('/api/bookings', async (req, res) => {
             carModel,
             date,
             $or: [
-                {
-                    startTime: { $lt: endTime, $gte: startTime } // Overlaps within the start time
-                },
-                {
-                    endTime: { $gt: startTime, $lte: endTime } // Overlaps within the end time
-                },
+                { startTime: { $lt: endTime, $gte: startTime } },
+                { endTime: { $gt: startTime, $lte: endTime } },
                 {
                     $and: [
                         { startTime: { $lte: startTime } },
-                        { endTime: { $gte: endTime } } // Completely overlaps the booking
+                        { endTime: { $gte: endTime } }
                     ]
                 }
             ],
@@ -72,6 +68,8 @@ app.post('/api/bookings', async (req, res) => {
             endTime,
             carModel,
             consultantName,
+            location,   // Save location
+            passkey     // Save passkey
         });
 
         await booking.save();
@@ -80,6 +78,33 @@ app.post('/api/bookings', async (req, res) => {
         res.status(500).json({ message: 'Error submitting booking', error });
     }
 });
+
+// Cancel a booking
+// Cancel a booking
+app.post('/api/cancel-booking', async (req, res) => {
+    const { bookingId, passkey } = req.body; // bookingId is the MongoDB _id
+
+    try {
+        // Find the booking by its MongoDB _id
+        const booking = await Booking.findById(bookingId);
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        // Check if the provided passkey matches the passkey stored in the booking
+        if (booking.passkey !== passkey) {
+            return res.status(401).json({ success: false, message: 'Invalid passkey' });
+        }
+
+        // Delete the booking from the database
+        await Booking.findByIdAndDelete(bookingId);
+        res.status(200).json({ success: true, message: 'Booking canceled successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error canceling booking', error });
+    }
+});
+
 
 // Start the server
 const PORT = process.env.PORT || 5000;

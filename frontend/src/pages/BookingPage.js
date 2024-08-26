@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import './BookingPage.css';
 import BookingForm from '../components/BookingForm';
 import BookingList from '../components/BookingList';
+import CarAvailability from '../components/CarAvailability'; // Import the new component
 
 const BookingPage = () => {
     const [bookings, setBookings] = useState([]);
@@ -24,10 +26,19 @@ const BookingPage = () => {
     };
 
     return (
-        <div>
-            <h1>Book a Test Drive</h1>
-            <BookingForm onBookingSuccess={handleBookingSuccess} />
-            <BookingList bookings={bookings} />
+        <div className="booking-page">
+            <h1 className="title">Book a Test Drive</h1>
+            <div className="container">
+                <div className="form-container">
+                    <BookingForm onBookingSuccess={handleBookingSuccess} />
+                </div>
+                <div className="availability-container">
+                    <CarAvailability />
+                </div>
+            </div>
+            <div className="list-container">
+                <BookingList bookings={bookings} />
+            </div>
         </div>
     );
 };
