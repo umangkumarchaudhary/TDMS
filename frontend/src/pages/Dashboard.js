@@ -1,67 +1,122 @@
 import React, { useState, useEffect } from 'react';
-import Calendar from 'react-calendar';  // Assuming you're using 'react-calendar' package
 import axios from 'axios';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import Calendar from 'react-calendar'; // Ensure correct import
+import 'react-calendar/dist/Calendar.css'; // Import default styles
 import './Dashboard.css';
 
-const Dashboard = () => {
-    const [date, setDate] = useState(new Date());
+const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#413ea0', '#d6a0ff', '#ff6f61'];
+
+const Dashboard = ({ refreshTrigger }) => {
     const [bookings, setBookings] = useState([]);
+    const [selectedDate, setSelectedDate] = useState(new Date()); // State to manage the selected date
 
     useEffect(() => {
         const fetchBookings = async () => {
             try {
-                const formattedDate = date.toISOString().split('T')[0]; // Format date as YYYY-MM-DD
-                const { data } = await axios.get(`/api/bookings?date=${formattedDate}`);
+                const { data } = await axios.get('/api/bookings');
                 setBookings(data);
             } catch (error) {
                 console.error('Error fetching bookings:', error);
             }
         };
+
         fetchBookings();
-    }, [date]);
+    }, [refreshTrigger]);
 
-    const carModels = ['A200', 'C200', 'E350']; // Add all your car models here
-    const timeSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00']; // 30-minute intervals
-
-    const isTimeSlotBooked = (slot, booking) => {
-        const slotTime = parseInt(slot.replace(':', ''), 10);
-        const startTime = parseInt(booking.startTime.replace(':', ''), 10);
-        const endTime = parseInt(booking.endTime.replace(':', ''), 10);
-
-        return slotTime >= startTime && slotTime < endTime;
+    // Format date as YYYY-MM-DD for comparison
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
+
+    const selectedDateString = formatDate(selectedDate);
+
+    const filteredBookings = bookings.filter(booking => 
+        formatDate(new Date(booking.date)) === selectedDateString
+    );
+
+    const graphData = filteredBookings.map(booking => {
+        const startTime = new Date(`1970-01-01T${booking.startTime}:00`);
+        const endTime = new Date(`1970-01-01T${booking.endTime}:00`);
+        const startMinutes = startTime.getHours() * 60 + startTime.getMinutes() + 40;
+        const endMinutes = endTime.getHours() * 60 + endTime.getMinutes()+ 40;
+        const duration = endMinutes - startMinutes;
+
+        return {
+            carModel: booking.carModel,
+            startTimeMinutes: startMinutes,
+            duration,
+            startTimeLabel: startTime.toTimeString().slice(0, 5),
+            endTimeLabel: endTime.toTimeString().slice(0, 5),
+            bookedBy: booking.consultantName,
+        };
+    });
+
+    // Create a map to store colors for each car model
+    const colorMap = {};
+    graphData.forEach((entry, index) => {
+        if (!colorMap[entry.carModel]) {
+            colorMap[entry.carModel] = colors[index % colors.length];
+        }
+    });
 
     return (
         <div className="dashboard">
-            <Calendar onChange={setDate} value={date} />
-            <div className="graph">
-                <table className="calendar">
-                    <thead>
-                        <tr>
-                            <th>Car Model</th>
-                            {timeSlots.map((slot, index) => (
-                                <th key={index}>{slot}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {carModels.map((model, i) => (
-                            <tr key={i}>
-                                <td>{model}</td>
-                                {timeSlots.map((slot, j) => (
-                                    <td key={j} className="time-slot">
-                                        {bookings.map((booking, k) => (
-                                            booking.carModel === model && 
-                                            isTimeSlotBooked(slot, booking) ? (
-                                                <div key={k} className="booking-block"></div>
-                                            ) : null
-                                        ))}
-                                    </td>
-                                ))}
-                            </tr>
+            <h2>Bookings for {selectedDateString}</h2>
+
+            <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={graphData} layout="vertical" barCategoryGap="20%">
+                    <XAxis 
+                        type="number" 
+                        domain={[0, 24 * 60]} 
+                        tickFormatter={(tick) => {
+                            const hours = Math.floor(tick / 60);
+                            const minutes = tick % 60;
+                            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                        }}
+                        label={{ value: 'Time', position: 'insideBottomRight', offset: -10 }}
+                        ticks={Array.from({ length: 25 }, (_, i) => i * 60)}
+                    />
+                    <YAxis type="category" dataKey="carModel" />
+                    <Tooltip 
+                        content={({ payload }) => {
+                            if (!payload || !payload.length) return null;
+                            const { bookedBy, startTimeLabel, endTimeLabel } = payload[0].payload;
+                            return (
+                                <div className="custom-tooltip">
+                                    <p className="label">{`Booked by: ${bookedBy}`}</p>
+                                    <p className="desc">{`Time: ${startTimeLabel} - ${endTimeLabel}`}</p>
+                                </div>
+                            );
+                        }}
+                    />
+                    <Bar 
+                        dataKey="duration" 
+                        fill="#8884d8"
+                        background={{ fill: '#eee' }}
+                        isAnimationActive={false}
+                        barSize={20}
+                    >
+                        {graphData.map((entry, index) => (
+                            <Cell 
+                                key={`cell-${index}`} 
+                                fill={colorMap[entry.carModel]} // Assign color based on car model
+                                x={entry.startTimeMinutes} // Adjust the x position by the start time
+                                width={entry.duration} // Adjust the width by the duration
+                            />
                         ))}
-                    </tbody>
-                </table>
+                    </Bar>
+                </BarChart>
+            </ResponsiveContainer>
+
+            <div className="calendar-container">
+                <Calendar
+                    onChange={setSelectedDate}
+                    value={selectedDate}
+                />
             </div>
         </div>
     );

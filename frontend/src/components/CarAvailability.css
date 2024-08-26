@@ -3,7 +3,8 @@
     flex-direction: column;
     padding: 20px;
     border-radius: 8px;
-    background-color: #ffffff;
+    background-color:#333;
+    color : white;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     max-width: 100%;
     box-sizing: border-box;
@@ -16,6 +17,9 @@
     flex-direction: column;
     gap: 15px;
     margin-bottom: 20px;
+}
+.car-availability h2 {
+    color : white
 }
 
 .filters label {
